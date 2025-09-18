@@ -1,0 +1,81 @@
+{
+  "name": "mirror-banner",
+  "private": true,
+  "version": "0.0.2",
+  "description": "Smart-mirror style banner (black screen, hidden cursor, centered logo) with Electron packaging",
+  "author": {
+    "name": "Mei",
+    "email": "mei@ai-dam.ai"
+  },
+  "homepage": "https://ai-dam.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ai-dam-ai/mirror-banner.git"
+  },
+  "license": "Proprietary",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "vite",
+    "dev": "concurrently -k -n RENDERER,ELECTRON -c auto \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "play": "electron .",
+    "electron-build": "electron-builder",
+    "deploy": "electron-builder --linux deb --x64"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
+    "electron-is-dev": "^3.0.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.2",
+    "electron": "^35.0.1",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.33.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.3.0",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.39.1",
+    "vite": "^7.1.2",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "ai.dam.mirrorbanner",
+    "productName": "MirrorBanner",
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icon.png",
+      "category": "Utility",
+      "executableName": "mirror-banner",
+      "desktop": {
+        "Name": "Mirror Banner",
+        "Comment": "Smart-mirror style banner (black screen, hidden cursor, centered logo)",
+        "Terminal": false,
+        "Type": "Application",
+        "Categories": "Utility;"
+      }
+    }
+  }
+}

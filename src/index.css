@@ -1,0 +1,39 @@
+/* Reset-ish */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+
+/* 스마트미러 배너 기본값 */
+html, body {
+  margin: 0;
+  background: #000;      /* 완전 블랙 */
+  color: #fff;           /* 혹시 텍스트 쓰면 대비 */
+  cursor: none;          /* 커서 숨김 */
+  overflow: hidden;      /* 스크롤 제거 */
+  user-select: none;     /* 선택 방지(배너 느낌) */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 중앙 정렬을 위한 유틸 */
+.fullscreen-center {
+  height: 100%;
+  width: 100%;
+  display: grid;
+  place-items: center;   /* 가로/세로 중앙정렬 */
+}
+
+/* 로고 반응형 사이즈 (세로/가로 상관 없이 적당히) */
+.logo {
+  width: min(40vw, 420px);
+  height: auto;
+  display: block;
+}
+
+/* 필요 시 미세한 페이드인 */
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 600ms ease-out forwards;
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
