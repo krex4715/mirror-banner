@@ -50,6 +50,8 @@ async function createWindow () {
      try { await win.loadFile(prodIndex) } catch {}
    }
 
+  win.webContents.setAudioMuted(false)
+
   win.once('ready-to-show', () => {
     win.show()
     if (!wantKiosk && !win.isFullScreen()) win.setFullScreen(true)
@@ -85,6 +87,7 @@ app.whenReady().then(async () => {
   await createWindow()
   if (isDev && win) win.webContents.openDevTools({ mode: 'detach' })
 })
+
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

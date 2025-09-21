@@ -54,7 +54,7 @@ html, body {
   top: 24px;               /* 필요하면 0~40px 사이로 조절 */
   left: 50%;
   transform: translateX(-50%);
-  width: clamp(160px, 20vw, 520px);  /* 화면에 맞춰 유연한 크기 */
+  width: clamp(112px, 14vw, 364px);  /* 화면에 맞춰 유연한 크기 */
   height: auto;
   z-index: 10;             /* 비디오(0), 캔버스(2)보다 높게 */
   pointer-events: none;    /* 클릭 막지 않기 */
@@ -63,61 +63,215 @@ html, body {
 
 
 
-/* 벽면 컨테이너 (원래 값 유지) */
-.wall {
-  width: min(92vw, 760px);
-  /* 원하는 위치 정책(A/B 중 택1) */
-  margin: 0 auto 300px;  /* A: 아래 기준 300px (부모가 grid면 align-self:end도 고려) */
-  align-self: end;
-  justify-self: center;
 
+
+
+
+
+
+/* ===== 공용 변수 ===== */
+:root{
+  --ticker-bottom: 80px;
+  --ticker-h: clamp(180px, 18vh, 360px);
+  --stage-gap: 0px;
+  --overlay-shift: -16vh;
+  --stage-h: clamp(28vh, 32vh, 40vh);
+
+  /* ✅ 추가: 고정 그리드의 ‘위에서부터’ 거리 */
+  --grid-top: clamp(96px, 12vh, 240px);  /* 중앙 위에서 살짝 아래 */
+  --grid-max-w: 1200px;
+  --grid-shift-x: 40px;                   /* → 오른쪽으로 밀기(+), 왼쪽은 음수 */
+
+  --grid-w: 1200px;
+  --grid-right: clamp(16px, 4vw, 64px);
+  --grid-over-gap: 14px;
+
+  --grid-gap-x: 20px;     /* 컬럼 간격 */
+  --grid-scale: 2;
+
+  /* 1,2,3 ↔ 4,5 사이 '행 간격'만 키움 */
+  --grid-gap-y: 56px;  /* 기존 40px에서 살짝 업 (원하면 60~72로) */
+
+  --bg-gap: 0px;                        /* 배경이미지 ↔ 배경영상 사이 간격 */
+  --bg-h: clamp(140px, 20vh, 320px);     /* 배경이미지 높이 */
+}
+
+
+
+/* 스테이지: 하단 티커 위로 띄운 16:9 비디오 레일 */
+.promo-stage{
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--ticker-bottom) + var(--ticker-h) + var(--stage-gap));
+  transform: translateX(-50%);
+  width: 100vw;
   display: grid;
-  gap: 28px;
+  place-items: center;
+  z-index: 5;
+}
+
+.stage-frame{
+  width: 100vw;
+  height: var(--stage-h);
+  position: relative;
+}
+
+/* 🔥 교체: .bg-video -> .stage-video */
+.stage-frame .stage-video{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;  /* 좌우 꽉 차는 크롭 */
   z-index: 1;
 }
 
-/* 3 위 + 2 아래(가운데 정렬) */
-.grid5 {
-  width: 100%;
+/* === 제품 5칸: 영상 '바로 위' 오른쪽 정렬 === */
+
+.grid5-fixed{
+  position: fixed;
+
+  /* ✅ 중앙 위쪽 위치 */
+  top: var(--grid-top);
+  left: 50%;
+  transform: translateX(-50%);
+
+  /* 크기/간격/스케일 기존 값 유지 */
+  width: min(92vw, calc(var(--grid-w) * var(--grid-scale)));
+  z-index: 2;
+
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-areas:
-    "v1 v2 v3"
-    ".  v4 v5";   /* 가운데 비워서 2개를 중앙에 배치 */
-  gap: 28px;
+  grid-template-columns: repeat(5, 1fr);
+  grid-auto-rows: 1fr;
+  column-gap: var(--grid-gap-x);
+  row-gap: var(--grid-gap-y);
+  pointer-events: auto;
 }
 
-/* 각 셀: 정사각형 */
-.cell {
-  position: relative;
+
+/* 셀 공통 (이건 유지) */
+.grid5-fixed .cell{
   aspect-ratio: 1 / 1;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
-  background: #000;            /* 투명 영역 대비용 */
-  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+  background: #000;
 }
-.cell > video {
+.grid5-fixed .cell > video{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-/* 영역 매핑 */
-.v1 { grid-area: v1; }
-.v2 { grid-area: v2; }
-.v3 { grid-area: v3; }
-.v4 { grid-area: v4; }
-.v5 { grid-area: v5; }
+/* 배치: 1 2 3 / 4(1–2 사이) / 5(2–3 사이) */
+.grid5-fixed > .cell:nth-child(1){ grid-column: 1; grid-row: 1; }
+.grid5-fixed > .cell:nth-child(2){ grid-column: 3; grid-row: 1; }
+.grid5-fixed > .cell:nth-child(3){ grid-column: 5; grid-row: 1; }
+.grid5-fixed > .cell:nth-child(4){ grid-column: 2; grid-row: 2; }
+.grid5-fixed > .cell:nth-child(5){ grid-column: 4; grid-row: 2; }
 
-/* (옵션) 화면이 아주 좁을 때 2열로 접기 */
-@media (max-width: 560px) {
-  .grid5 {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-areas:
-      "v1 v2"
-      "v3 v4"
-      "v5 v5";
+/* 좁은 화면 보호 */
+@media (max-width: 520px){
+  :root{
+    --grid-w: 1000px;
+    --grid-gap-x: 16px;
+    --grid-gap-y: 20px;
   }
+  .grid5-fixed{ padding: 14px; border-radius: 14px; }
 }
 
+
+
+
+
+
+
+
+/* ===== Bottom: QR + Tempo ticker ===== */
+.tempo-wrap{
+  /* 공통 변수 (QR와 슬라이드가 공유) */
+  --h: clamp(180px, 18vh, 360px);   /* 배너/QR 높이 */
+  --gapX: 24px;                     /* QR ↔ 슬라이드 간격 */
+  --gap: 20px;                      /* 슬라이드 카드 간격 */
+  --visible: 2.5;                   /* 동시에 보이는 카드 수 */
+  --ratio: 2.3392857;               /* 1310 / 560 */
+  --itemW: calc(var(--h) * var(--ratio));
+  --duration: 22s;                  /* 한 사이클 시간 */
+
+  position: fixed;
+  left: 50%;
+  bottom: 80px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--gapX);
+  z-index: 6;
+}
+
+
+/* 슬라이드 */
+.tempo-ticker{
+  width: 100vw;                      /* ✅ QR 자리까지 전부 사용 */
+  overflow: hidden;
+}
+
+.tempo-track{
+  display:flex;
+  gap: var(--gap);
+  width:max-content;
+  will-change: transform;
+  animation: tempo-scroll var(--duration) linear infinite;
+}
+
+.tempo-item{
+  width: var(--itemW);
+  height: var(--h);
+  flex: 0 0 auto;
+  border-radius: 10px;
+  overflow: hidden;
+  background:#000;
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+}
+
+.tempo-item img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+@keyframes tempo-scroll{
+  from{ transform: translateX(0); }
+  to  { transform: translateX(-50%); }
+}
+
+/* 아주 좁은 화면 대응(선택) */
+@media (max-width: 520px){
+  .tempo-wrap{ bottom: 48px; --h: 140px; }
+}
+
+
+
+/* ✅ 배경영상 바로 위에 붙는 풀폭 배경이미지 (좌우 꽉차게) */
+.tempo-bg{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(
+    var(--ticker-bottom) + var(--ticker-h) + var(--stage-gap) + var(--stage-h) + var(--bg-gap)
+  );
+  z-index: 1;               /* 스테이지(5) 위, 그리드(9) 아래 */
+  pointer-events: none;
+}
+
+/* 핵심: 원본 비율 유지 + 좌우 꽉 차고 절대 크롭 없음 */
+.tempo-bg > img{
+  display: block;
+  width: 100vw;   /* 좌우 꽉 차게 */
+  height: auto;   /* 세로 자동 (노크롭) */
+}
