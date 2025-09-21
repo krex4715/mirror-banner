@@ -14,7 +14,7 @@
   },
   "license": "Proprietary",
   "type": "module",
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "start": "vite",
     "dev": "concurrently -k -n RENDERER,ELECTRON -c auto \"vite\" \"wait-on http://localhost:5173 && electron .\"",

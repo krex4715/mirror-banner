@@ -37,3 +37,87 @@ html, body {
 @keyframes fadeIn {
   to { opacity: 1; }
 }
+
+.bg-video {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;    /* 화면 꽉 채움 (크롭 허용) */
+  z-index: 0;
+  pointer-events: none; /* 클릭 등 막기 */
+}
+
+
+.top-logo {
+  position: fixed;
+  top: 24px;               /* 필요하면 0~40px 사이로 조절 */
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(160px, 20vw, 520px);  /* 화면에 맞춰 유연한 크기 */
+  height: auto;
+  z-index: 10;             /* 비디오(0), 캔버스(2)보다 높게 */
+  pointer-events: none;    /* 클릭 막지 않기 */
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); /* 선택: 대비 강화 */
+}
+
+
+
+/* 벽면 컨테이너 (원래 값 유지) */
+.wall {
+  width: min(92vw, 760px);
+  /* 원하는 위치 정책(A/B 중 택1) */
+  margin: 0 auto 300px;  /* A: 아래 기준 300px (부모가 grid면 align-self:end도 고려) */
+  align-self: end;
+  justify-self: center;
+
+  display: grid;
+  gap: 28px;
+  z-index: 1;
+}
+
+/* 3 위 + 2 아래(가운데 정렬) */
+.grid5 {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-areas:
+    "v1 v2 v3"
+    ".  v4 v5";   /* 가운데 비워서 2개를 중앙에 배치 */
+  gap: 28px;
+}
+
+/* 각 셀: 정사각형 */
+.cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;            /* 투명 영역 대비용 */
+  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+}
+.cell > video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 영역 매핑 */
+.v1 { grid-area: v1; }
+.v2 { grid-area: v2; }
+.v3 { grid-area: v3; }
+.v4 { grid-area: v4; }
+.v5 { grid-area: v5; }
+
+/* (옵션) 화면이 아주 좁을 때 2열로 접기 */
+@media (max-width: 560px) {
+  .grid5 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-areas:
+      "v1 v2"
+      "v3 v4"
+      "v5 v5";
+  }
+}
+

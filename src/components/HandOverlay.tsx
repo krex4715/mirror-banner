@@ -5,14 +5,10 @@ import {
   type HandLandmarkerResult,
 } from '@mediapipe/tasks-vision'
 
-type Props = {
-  onPinch?: (phase: 'start' | 'move' | 'end', x: number, y: number) => void
-  onHandMove?: (x: number, y: number) => void
-  pinchOn?: number   // 핀치 시작 임계값(정규화 거리)
-  pinchOff?: number  // 핀치 해제 임계값(정규화 거리)
-}
+const LINE_PX = 2                 // 화면에서 보일 선 두께(px)
+const POINT_RADIUS_PX = 3         // 화면에서 보일 점 반지름(px)
 
-export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinchOff = 0.06 }: Props) {
+export default function HandOverlay() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [ready, setReady] = useState(false)
@@ -26,19 +22,37 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
     let finalStream: MediaStream | null = null
     let timeoutId: any = null
     let videoInputs: MediaDeviceInfo[] = []
-    let currentCamIndex = 1
-    let pinching = false // 내부 상태(히스테리시스 후)
+    let currentCamIndex = 1 // 기본 1번
 
     const stopStream = (s: MediaStream | null) => {
       if (!s) return
       for (const t of s.getTracks()) t.stop()
     }
 
-    const fitCanvas = (videoEl: HTMLVideoElement, canvas: HTMLCanvasElement) => {
-      const { videoWidth: w, videoHeight: h } = videoEl
-      if (!w || !h) return
-      canvas.width = w
-      canvas.height = h
+    // 캔버스를 "표시 크기 × DPR"로 맞추기 (lineWidth가 CSS 스케일에 영향받지 않게)
+    const resizeCanvasToDisplay = (canvas: HTMLCanvasElement) => {
+      const dpr = window.devicePixelRatio || 1
+      const cssW = canvas.clientWidth || window.innerWidth
+      const cssH = canvas.clientHeight || window.innerHeight
+      const needW = Math.round(cssW * dpr)
+      const needH = Math.round(cssH * dpr)
+      if (canvas.width !== needW) canvas.width = needW
+      if (canvas.height !== needH) canvas.height = needH
+    }
+
+    // src(w,h)을 dst(W,H)에 "cover"로 투영할 때 scale/offset 계산
+    const computeCover = (srcW: number, srcH: number, dstW: number, dstH: number) => {
+      const scale = Math.max(dstW / srcW, dstH / srcH)
+      const drawW = srcW * scale
+      const drawH = srcH * scale
+      const offX = (dstW - drawW) / 2
+      const offY = (dstH - drawH) / 2
+      return { scale, offX, offY }
+    }
+
+    // 표시 크기 기준으로만 캔버스 내부 해상도(DPR) 갱신
+    const fitCanvas = (canvas: HTMLCanvasElement) => {
+      resizeCanvasToDisplay(canvas)
     }
 
     const openStreamByIndex = async (idx: number) => {
@@ -47,8 +61,6 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
       if (!chosen) throw new Error('카메라 장치를 찾을 수 없습니다.')
 
       stopStream(finalStream)
-      finalStream = null
-
       finalStream = await navigator.mediaDevices.getUserMedia({
         video: {
           deviceId: { exact: chosen.deviceId },
@@ -64,13 +76,14 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
         else videoEl.addEventListener('loadedmetadata', () => res(), { once: true })
       })
       await videoEl.play().catch(() => {})
-      fitCanvas(videoEl, canvasRef.current!)
+      fitCanvas(canvasRef.current!)
       currentCamIndex = idx
       console.log('[cam] using index', currentCamIndex, chosen.label || chosen.deviceId)
     }
 
     const start = async () => {
       try {
+        // ?cam=로 오버라이드
         const params = new URLSearchParams(location.search)
         const camIndexFromQuery = params.get('cam')
         if (Number.isFinite(Number(camIndexFromQuery))) {
@@ -81,7 +94,7 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
         const canvas = canvasRef.current!
         const ctx = canvas.getContext('2d')!
 
-        // 1) 권한 요청(초기 아무 카메라)
+        // 1) 권한 팝업 유도
         firstStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         videoEl.srcObject = firstStream
 
@@ -94,27 +107,27 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
           else videoEl.addEventListener('loadedmetadata', () => res(), { once: true })
         })
         await videoEl.play().catch(() => {})
-        fitCanvas(videoEl, canvas)
-        window.addEventListener('resize', () => fitCanvas(videoEl, canvas))
+        fitCanvas(canvas)
+        window.addEventListener('resize', () => fitCanvas(canvas))
 
         // 2) 장치 나열
         const devices = await navigator.mediaDevices.enumerateDevices()
         videoInputs = devices.filter((d) => d.kind === 'videoinput')
+        console.log('[cams]', videoInputs.map((d, i) => ({ i, label: d.label, deviceId: d.deviceId })))
         if (videoInputs.length === 0) throw new Error('카메라 장치를 찾을 수 없습니다.')
 
-        // 원하는 인덱스로 재연결
+        // 첫 스트림 장치 vs 원하는 인덱스 비교
         const firstTrack = firstStream.getVideoTracks()[0]
         const firstId = firstTrack.getSettings().deviceId
         const chosen = videoInputs[currentCamIndex] ?? videoInputs[0]
         if (!firstId || firstId !== chosen.deviceId) {
-          stopStream(firstStream)
-          firstStream = null
+          stopStream(firstStream); firstStream = null
           await openStreamByIndex(currentCamIndex)
         } else {
           finalStream = firstStream
         }
 
-        // 3) MediaPipe — 로컬(오프라인) 경로
+        // 3) MediaPipe 로컬 로드 (오프라인 OK)
         const vision = await FilesetResolver.forVisionTasks('./mediapipe/wasm')
         landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: './mediapipe/hand_landmarker.task' },
@@ -128,7 +141,7 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
         setReady(true)
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null }
 
-        // 4) 렌더 루프 + 핀치 감지
+        // 4) 랜더 루프 (cover 투영 + 절대 px 두께)
         const pairs: [number, number][] = [
           [0,1],[1,2],[2,3],[3,4],
           [0,5],[5,6],[6,7],[7,8],
@@ -140,91 +153,68 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
 
         const draw = () => {
           if (!landmarker || stopped) return
-          const w = videoEl.videoWidth
-          const h = videoEl.videoHeight
-          if (w && h) {
-            // 캔버스는 시각화를 위해 좌우 반전
-            ctx.setTransform(-1, 0, 0, 1, w, 0)
-            ctx.clearRect(0, 0, w, h)
+          const vW = videoEl.videoWidth
+          const vH = videoEl.videoHeight
+          if (vW && vH) {
+            // 캔버스 내부 해상도(DPR 반영된 픽셀)
+            const cW = canvas.width
+            const cH = canvas.height
 
+            // 비디오를 캔버스에 cover로 투영 + 좌우 반전
+            const { scale, offX, offY } = computeCover(vW, vH, cW, cH)
+
+            // 배경 클리어
+            ctx.setTransform(1, 0, 0, 1, 0, 0)
+            ctx.clearRect(0, 0, cW, cH)
+
+            // 좌우반전 + cover 오프셋/스케일 적용
+            // (x는 0~vW, y는 0~vH 좌표계로 그린다고 가정)
+            ctx.setTransform(-scale, 0, 0, scale, cW - offX, offY)
+
+            const ts = performance.now()
             const result: HandLandmarkerResult | undefined =
-              landmarker.detectForVideo(videoEl, performance.now())
+              landmarker.detectForVideo(videoEl, ts)
 
-            let nowPinching = pinching
-            let cx = 0, cy = 0 // 정규화(0..1)
+            if (result?.landmarks) {
+              // 선/점 두께를 "화면 px"로 고정하기 위해 scale 보정
+              const dpr = window.devicePixelRatio || 1
+              const fixedLine = (LINE_PX * dpr) / scale
+              const fixedR = (POINT_RADIUS_PX * dpr) / scale
 
-            if (result?.landmarks?.length) {
-              const hand = result.landmarks[0]
-              const thumb = hand[4]
-              const index = hand[8]
+              ctx.lineWidth = fixedLine
+              ctx.strokeStyle = '#ffffff'
+              ctx.fillStyle = '#ffffff'
 
-              const dx = thumb.x - index.x
-              const dy = thumb.y - index.y
-              const d = Math.hypot(dx, dy)
-
-              if (!pinching && d <= pinchOn) nowPinching = true
-              else if (pinching && d >= pinchOff) nowPinching = false
-
-              // 중심(정규화)
-              cx = (thumb.x + index.x) / 2
-              cy = (thumb.y + index.y) / 2
-
-              // 뼈대 & 점 시각화
-              ctx.lineWidth = 2
-              ctx.strokeStyle = nowPinching ? '#34d399' : '#ffffff'
-              ctx.fillStyle = nowPinching ? '#34d399' : '#ffffff'
-              for (const p of hand) {
-                ctx.beginPath()
-                ctx.arc(p.x * w, p.y * h, 3, 0, Math.PI * 2)
-                ctx.fill()
+              for (const hand of result.landmarks) {
+                // MediaPipe 좌표는 0~1 정규화 → 영상 픽셀 좌표로 변환
+                for (const p of hand) {
+                  const x = p.x * vW
+                  const y = p.y * vH
+                  ctx.beginPath()
+                  ctx.arc(x, y, fixedR, 0, Math.PI * 2)
+                  ctx.fill()
+                }
+                for (const [a, b] of pairs) {
+                  const A = hand[a], B = hand[b]
+                  const Ax = A.x * vW, Ay = A.y * vH
+                  const Bx = B.x * vW, By = B.y * vH
+                  ctx.beginPath()
+                  ctx.moveTo(Ax, Ay)
+                  ctx.lineTo(Bx, By)
+                  ctx.stroke()
+                }
               }
-              for (const [a, b] of pairs) {
-                const A = hand[a], B = hand[b]
-                ctx.beginPath()
-                ctx.moveTo(A.x * w, A.y * h)
-                ctx.lineTo(B.x * w, B.y * h)
-                ctx.stroke()
-              }
-
-              // 중심 강조(캔버스 좌표 — 이미 좌우 반전 상태라 그대로 그림)
-              ctx.beginPath()
-              ctx.arc(cx * w, cy * h, nowPinching ? 10 : 6, 0, Math.PI * 2)
-              ctx.stroke()
             }
 
             // 좌표계 복구
             ctx.setTransform(1, 0, 0, 1, 0, 0)
-
-            // === 콜백: 항상 "뷰포트 CSS 픽셀" 좌표로 변환해 전달 ===
-            // 정규화(cx,cy)는 원본 비디오 좌표(좌->우 증가).
-            // 화면은 거울처럼 보이도록 반전시켜 그렸다. 사용자가 느끼는 좌표계에 맞추려면 X를 뒤집자.
-            // 뷰포트 좌표:
-           const viewportX = (1.0 - cx) * window.innerWidth
-           const viewportY = cy * window.innerHeight
-
-           // ★ 손 보일 때마다 안개에 현재 좌표 공급
-           if (onHandMove && result?.landmarks?.length) {
-             onHandMove(viewportX, viewportY)
-           }
-
-            if (onPinch) {
-              if (!pinching && nowPinching) {
-                onPinch('start', viewportX, viewportY)
-              } else if (pinching && nowPinching) {
-                onPinch('move', viewportX, viewportY)
-              } else if (pinching && !nowPinching) {
-                onPinch('end', viewportX, viewportY)
-              }
-            }
-
-            pinching = nowPinching
           }
           raf = requestAnimationFrame(draw)
         }
 
         draw()
 
-        // 카메라 전환(C)
+        // 5) 카메라 전환 키 (C)
         const onKey = (e: KeyboardEvent) => {
           if (e.key.toLowerCase() === 'c' && videoInputs.length > 1) {
             const next = (currentCamIndex + 1) % videoInputs.length
@@ -235,6 +225,7 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
           }
         }
         window.addEventListener('keydown', onKey)
+
         return () => window.removeEventListener('keydown', onKey)
       } catch (e: any) {
         console.error(e)
@@ -253,7 +244,7 @@ export default function HandOverlay({ onPinch, onHandMove, pinchOn = 0.045, pinc
       if (timeoutId) clearTimeout(timeoutId)
       cleanupExtra?.then?.((fn) => typeof fn === 'function' && fn())
     }
-  }, [onPinch, pinchOn, pinchOff])
+  }, [])
 
   return (
     <>
