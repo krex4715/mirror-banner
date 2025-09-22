@@ -16,12 +16,15 @@ export default function App() {
 
       {/* 제품 5칸 그리드 */}
       <div className="grid5-fixed">
+
+        {/* 1~5번: 기존 mp4들 */}
         <div className="cell"><video src="./product/1.mp4" autoPlay muted loop playsInline /></div>
         <div className="cell"><video src="./product/2.mp4" autoPlay muted loop playsInline /></div>
         <div className="cell"><video src="./product/3.mp4" autoPlay muted loop playsInline /></div>
         <div className="cell"><video src="./product/4.mp4" autoPlay muted loop playsInline /></div>
         <div className="cell"><video src="./product/5.mp4" autoPlay muted loop playsInline /></div>
       </div>
+
 
       {/* ✅ 연기 커서가 셀과 교차하면 여기에 정보 카드가 뜬다(티커 위 레이어) */}
       <ProductInfoOverlay />
