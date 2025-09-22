@@ -5,145 +5,160 @@ html, body, #root { height: 100%; }
 /* 스마트미러 배너 기본값 */
 html, body {
   margin: 0;
-  background: #000;      /* 완전 블랙 */
-  color: #fff;           /* 혹시 텍스트 쓰면 대비 */
-  cursor: none;          /* 커서 숨김 */
-  overflow: hidden;      /* 스크롤 제거 */
-  user-select: none;     /* 선택 방지(배너 느낌) */
+  background: #000;
+  color: #fff;
+  cursor: none;
+  overflow: hidden;
+  user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 중앙 정렬을 위한 유틸 */
+/* 중앙 정렬 유틸 */
 .fullscreen-center {
   height: 100%;
   width: 100%;
   display: grid;
-  place-items: center;   /* 가로/세로 중앙정렬 */
+  place-items: center;
 }
 
-/* 로고 반응형 사이즈 (세로/가로 상관 없이 적당히) */
+/* 로고 */
 .logo {
   width: min(40vw, 420px);
   height: auto;
   display: block;
 }
 
-/* 필요 시 미세한 페이드인 */
-.fade-in {
-  opacity: 0;
-  animation: fadeIn 600ms ease-out forwards;
-}
+/* 페이드인 */
+.fade-in { opacity: 0; animation: fadeIn 600ms ease-out forwards; }
+@keyframes fadeIn { to { opacity: 1; } }
 
-@keyframes fadeIn {
-  to { opacity: 1; }
-}
-
+/* (참고용) 전면 비디오 유틸 */
 .bg-video {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  object-fit: cover;    /* 화면 꽉 채움 (크롭 허용) */
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh;
+  object-fit: cover;
   z-index: 0;
-  pointer-events: none; /* 클릭 등 막기 */
+  pointer-events: none;
 }
 
-
+/* 상단 로고 */
 .top-logo {
   position: fixed;
-  top: 24px;               /* 필요하면 0~40px 사이로 조절 */
-  left: 50%;
-  transform: translateX(-50%);
-  width: clamp(112px, 14vw, 364px);  /* 화면에 맞춰 유연한 크기 */
+  top: 24px;
+  left: 50%; transform: translateX(-50%);
+  width: clamp(112px, 14vw, 364px);
   height: auto;
-  z-index: 10;             /* 비디오(0), 캔버스(2)보다 높게 */
-  pointer-events: none;    /* 클릭 막지 않기 */
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); /* 선택: 대비 강화 */
+  z-index: 10;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35));
 }
-
-
-
-
-
-
-
-
 
 /* ===== 공용 변수 ===== */
 :root{
-  --ticker-bottom: 80px;
+  /* 하단 배너(티커) & 스테이지(배경영상) */
+  --stage-h: clamp(28vh, 32vh, 40vh);  /* 배경영상 레일 높이 */
+  --stage-gap: 0px;                    /* 배경영상 ↔ 티커 사이 간격 */
+
+  /* 티커(배너 슬라이드) 카드 크기/속도 */
+  --ticker-bottom: 0px;                /* 사용 안하지만 호환용 */
   --ticker-h: clamp(180px, 18vh, 360px);
-  --stage-gap: 0px;
-  --overlay-shift: -16vh;
-  --stage-h: clamp(28vh, 32vh, 40vh);
 
-  /* ✅ 추가: 고정 그리드의 ‘위에서부터’ 거리 */
-  --grid-top: clamp(96px, 12vh, 240px);  /* 중앙 위에서 살짝 아래 */
-  --grid-max-w: 1200px;
-  --grid-shift-x: 40px;                   /* → 오른쪽으로 밀기(+), 왼쪽은 음수 */
+  /* 제품 5그리드 위치/크기 */
+  --grid-top: clamp(96px, 12vh, 240px);   /* 중앙 위에서 살짝 아래 */
+  --grid-w: 1200px;                        /* 기준 폭 */
+  --grid-scale: 1.5;                       /* 셀 스케일(1.0~2.0 조절) */
+  --grid-gap-x: 20px;                      /* 가로 간격 */
+  --grid-gap-y: 56px;                      /* 세로(1,2,3 ↔ 4,5) 간격 */
 
-  --grid-w: 1200px;
-  --grid-right: clamp(16px, 4vw, 64px);
-  --grid-over-gap: 14px;
 
-  --grid-gap-x: 20px;     /* 컬럼 간격 */
-  --grid-scale: 2;
+    /* 필요시 조절 */
+  --bg-gap: 0px;                 /* 티커 윗변과 이미지 사이 여백 */
+  --bg-h: clamp(140px, 20vh, 320px);
 
-  /* 1,2,3 ↔ 4,5 사이 '행 간격'만 키움 */
-  --grid-gap-y: 56px;  /* 기존 40px에서 살짝 업 (원하면 60~72로) */
+  --ui-font-title: "GmarketSansBlack", "LINESeedKR-Bd", "Orbitron", system-ui, -apple-system, sans-serif;
+  --ui-font-body: "SUIT-Variable", system-ui, -apple-system, sans-serif;
+}
 
-  --bg-gap: 0px;                        /* 배경이미지 ↔ 배경영상 사이 간격 */
-  --bg-h: clamp(140px, 20vh, 320px);     /* 배경이미지 높이 */
+/* 제목: Gmarket Sans Black */
+@font-face {
+  font-family: "GmarketSansBlack";
+  src: url("./fonts/GmarketSansTTFBlack.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 대안 제목: LINE Seed KR Bold (있으면 같이 넣어두기) */
+@font-face {
+  font-family: "LINESeedKR-Bd";
+  src: url("./fonts/LINESeedKR-Bd.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 영문/숫자 네온 느낌 */
+@font-face {
+  font-family: "Orbitron";
+  src: url("./fonts/Orbitron-Variable.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 본문: SUIT Variable */
+@font-face {
+  font-family: "SUIT-Variable";
+  src: url("./fonts/SUIT-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 
 
-/* 스테이지: 하단 티커 위로 띄운 16:9 비디오 레일 */
+
+
+
+
+/* ===== 스테이지: 맨 아래 고정 (배경영상) ===== */
 .promo-stage{
   position: fixed;
   left: 50%;
-  bottom: calc(var(--ticker-bottom) + var(--ticker-h) + var(--stage-gap));
+  bottom: 0;                          /* ✅ 바닥에 붙임 */
   transform: translateX(-50%);
   width: 100vw;
   display: grid;
   place-items: center;
-  z-index: 5;
+  z-index: 11;                         /* 티커(6)보다 아래 */
 }
-
 .stage-frame{
   width: 100vw;
   height: var(--stage-h);
   position: relative;
 }
-
-/* 🔥 교체: .bg-video -> .stage-video */
 .stage-frame .stage-video{
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;  /* 좌우 꽉 차는 크롭 */
-  z-index: 1;
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 10;
 }
 
-/* === 제품 5칸: 영상 '바로 위' 오른쪽 정렬 === */
-
+/* ===== 제품 5칸 그리드: 중앙 위쪽 ===== */
 .grid5-fixed{
   position: fixed;
 
-  /* ✅ 중앙 위쪽 위치 */
+  /* 중앙 위쪽 위치 */
   top: var(--grid-top);
   left: 50%;
   transform: translateX(-50%);
 
-  /* 크기/간격/스케일 기존 값 유지 */
+  /* 전체 스케일 적용 */
   width: min(92vw, calc(var(--grid-w) * var(--grid-scale)));
-  z-index: 2;
+  z-index: 1;                         /* 로고 아래, 티커/스테이지 위 */
 
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  /* 프레임/테두리 제거 */
+  padding: 0; border-radius: 0; background: transparent; box-shadow: none;
 
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -153,8 +168,7 @@ html, body {
   pointer-events: auto;
 }
 
-
-/* 셀 공통 (이건 유지) */
+/* 셀 공통 */
 .grid5-fixed .cell{
   aspect-ratio: 1 / 1;
   border-radius: 12px;
@@ -162,10 +176,8 @@ html, body {
   background: #000;
 }
 .grid5-fixed .cell > video{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
 }
 
 /* 배치: 1 2 3 / 4(1–2 사이) / 5(2–3 사이) */
@@ -175,51 +187,29 @@ html, body {
 .grid5-fixed > .cell:nth-child(4){ grid-column: 2; grid-row: 2; }
 .grid5-fixed > .cell:nth-child(5){ grid-column: 4; grid-row: 2; }
 
-/* 좁은 화면 보호 */
-@media (max-width: 520px){
-  :root{
-    --grid-w: 1000px;
-    --grid-gap-x: 16px;
-    --grid-gap-y: 20px;
-  }
-  .grid5-fixed{ padding: 14px; border-radius: 14px; }
-}
-
-
-
-
-
-
-
-
-/* ===== Bottom: QR + Tempo ticker ===== */
+/* ===== Bottom: 배너 슬라이드(티커) — 배경영상 바로 위 ===== */
 .tempo-wrap{
-  /* 공통 변수 (QR와 슬라이드가 공유) */
-  --h: clamp(180px, 18vh, 360px);   /* 배너/QR 높이 */
-  --gapX: 24px;                     /* QR ↔ 슬라이드 간격 */
-  --gap: 20px;                      /* 슬라이드 카드 간격 */
-  --visible: 2.5;                   /* 동시에 보이는 카드 수 */
+  /* 카드/트랙 크기 변수 */
+  --h: clamp(180px, 18vh, 360px);
+  --gap: 20px;
+  --visible: 2.5;
   --ratio: 2.3392857;               /* 1310 / 560 */
   --itemW: calc(var(--h) * var(--ratio));
-  --duration: 22s;                  /* 한 사이클 시간 */
+  --duration: 22s;
 
   position: fixed;
   left: 50%;
-  bottom: 80px;
+  bottom: calc(var(--stage-h) + var(--stage-gap));  /* ✅ 스테이지 위 */
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: var(--gapX);
-  z-index: 6;
+  z-index: 6;                        /* 스테이지(5) 위 */
 }
 
-
-/* 슬라이드 */
 .tempo-ticker{
-  width: 100vw;                      /* ✅ QR 자리까지 전부 사용 */
+  width: 100vw;                      /* 전폭 */
   overflow: hidden;
 }
-
 .tempo-track{
   display:flex;
   gap: var(--gap);
@@ -227,7 +217,6 @@ html, body {
   will-change: transform;
   animation: tempo-scroll var(--duration) linear infinite;
 }
-
 .tempo-item{
   width: var(--itemW);
   height: var(--h);
@@ -237,41 +226,40 @@ html, body {
   background:#000;
   box-shadow: 0 6px 16px rgba(0,0,0,.35);
 }
-
 .tempo-item img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
+  width:100%; height:100%;
+  object-fit:cover; display:block;
 }
-
 @keyframes tempo-scroll{
   from{ transform: translateX(0); }
   to  { transform: translateX(-50%); }
 }
 
-/* 아주 좁은 화면 대응(선택) */
-@media (max-width: 520px){
-  .tempo-wrap{ bottom: 48px; --h: 140px; }
-}
-
-
-
-/* ✅ 배경영상 바로 위에 붙는 풀폭 배경이미지 (좌우 꽉차게) */
+/* ✅ 티커 바로 위에 고정 (배경영상보다 위) */
 .tempo-bg{
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(
-    var(--ticker-bottom) + var(--ticker-h) + var(--stage-gap) + var(--stage-h) + var(--bg-gap)
-  );
-  z-index: 1;               /* 스테이지(5) 위, 그리드(9) 아래 */
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--stage-h) + var(--stage-gap) + var(--ticker-h) + var(--bg-gap));
+  z-index: 1;                     /* 스테이지(5) < 티커(6) < 이미지(7) < 그리드(9) < 로고(10) */
   pointer-events: none;
 }
 
-/* 핵심: 원본 비율 유지 + 좌우 꽉 차고 절대 크롭 없음 */
+/* 노크롭 + 과도한 키 높이 방지 */
 .tempo-bg > img{
   display: block;
-  width: 100vw;   /* 좌우 꽉 차게 */
-  height: auto;   /* 세로 자동 (노크롭) */
+  width: 100vw;           /* 좌우 꽉 차게 */
+  height: auto;           /* 비율 유지, 노크롭 */
+}
+
+
+
+
+/* 좁은 화면 보호 */
+@media (max-width: 520px){
+  :root{
+    --grid-w: 1000px;
+    --grid-gap-x: 16px;
+    --grid-gap-y: 20px;
+  }
 }

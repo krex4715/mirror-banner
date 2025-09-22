@@ -1,6 +1,7 @@
 import PromoStage from './components/PromoStage'
 import HandOverlay from './components/HandOverlay'
 import TempoTicker from './components/TempoTicker'
+import ProductInfoOverlay from './components/ProductInfoOverlay'   // ✅ 추가
 import './index.css'
 
 export default function App() {
@@ -13,7 +14,7 @@ export default function App() {
         <img src="./tempo_background.png" alt="" />
       </div>
 
-      {/* 제품 5칸 그리드 (이미 만들어둔 고정 요소) */}
+      {/* 제품 5칸 그리드 */}
       <div className="grid5-fixed">
         <div className="cell"><video src="./product/1.mp4" autoPlay muted loop playsInline /></div>
         <div className="cell"><video src="./product/2.mp4" autoPlay muted loop playsInline /></div>
@@ -22,10 +23,12 @@ export default function App() {
         <div className="cell"><video src="./product/5.mp4" autoPlay muted loop playsInline /></div>
       </div>
 
+      {/* ✅ 연기 커서가 셀과 교차하면 여기에 정보 카드가 뜬다(티커 위 레이어) */}
+      <ProductInfoOverlay />
+
       <PromoStage />
       <HandOverlay />
       <TempoTicker />
     </main>
   )
 }
-

@@ -1,133 +1,78 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  FilesetResolver,
-  HandLandmarker,
-  type HandLandmarkerResult,
-} from '@mediapipe/tasks-vision'
+import { FilesetResolver, HandLandmarker, type HandLandmarkerResult } from '@mediapipe/tasks-vision'
 
-const LINE_PX = 2                 // 화면에서 보일 선 두께(px)
-const POINT_RADIUS_PX = 3         // 화면에서 보일 점 반지름(px)
+import { resizeCanvasToDisplay, computeCover, centroid } from '../utils/geom'
+import { isFist, updateFistState } from '../gesture/fist'
+import { NeonSmoke } from '../effects/neonSmoke'
+
+type Prompt = { visible: boolean; x: number; y: number }
 
 export default function HandOverlay() {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const skelRef  = useRef<HTMLCanvasElement>(null) // 좌표 변환용(그림은 안 그림)
+  const fxRef    = useRef<HTMLCanvasElement>(null) // 연기
+
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // ▽▽ 손별 안내 배지 상태(최대 2손) ▽▽
+  const [prompts, setPrompts] = useState<Prompt[]>([
+    { visible: false, x: 0, y: 0 },
+    { visible: false, x: 0, y: 0 },
+  ])
+
+  // 손 2개까지 제스처 상태
+  const fistEma = useRef<number[]>([0, 0])
+  const fistOn  = useRef<boolean[]>([false, false])
+
+  // 손별 위치 EMA(안내 원 떨림 방지, CSS px)
+  const posEma  = useRef<{x:number;y:number}[]>([{x:0,y:0},{x:0,y:0}])
+
+  // 손별 안내 안정화(최근 open 손의 마지막 시각/좌표)
+  const lastOpenTsRef  = useRef<number[]>([0,0])
+  const lastOpenPosRef = useRef<{x:number;y:number}[]>([{x:0,y:0},{x:0,y:0}])
+  const GUIDE_GRACE_MS = 160 // 오픈 손이 잠깐 사라져도 유지할 시간(ms)
+
   useEffect(() => {
     let landmarker: HandLandmarker | null = null
+    let stream: MediaStream | null = null
+    let smoke: NeonSmoke | null = null
     let raf = 0
     let stopped = false
-    let firstStream: MediaStream | null = null
-    let finalStream: MediaStream | null = null
-    let timeoutId: any = null
-    let videoInputs: MediaDeviceInfo[] = []
-    let currentCamIndex = 1 // 기본 1번
 
-    const stopStream = (s: MediaStream | null) => {
-      if (!s) return
-      for (const t of s.getTracks()) t.stop()
+    const fitAll = () => {
+      if (skelRef.current) resizeCanvasToDisplay(skelRef.current)
+      if (fxRef.current && skelRef.current) {
+        fxRef.current.width  = skelRef.current.width
+        fxRef.current.height = skelRef.current.height
+      }
+      if (smoke && skelRef.current) {
+        smoke.setPixelSize(skelRef.current.width, skelRef.current.height)
+      }
     }
 
-    // 캔버스를 "표시 크기 × DPR"로 맞추기 (lineWidth가 CSS 스케일에 영향받지 않게)
-    const resizeCanvasToDisplay = (canvas: HTMLCanvasElement) => {
-      const dpr = window.devicePixelRatio || 1
-      const cssW = canvas.clientWidth || window.innerWidth
-      const cssH = canvas.clientHeight || window.innerHeight
-      const needW = Math.round(cssW * dpr)
-      const needH = Math.round(cssH * dpr)
-      if (canvas.width !== needW) canvas.width = needW
-      if (canvas.height !== needH) canvas.height = needH
-    }
-
-    // src(w,h)을 dst(W,H)에 "cover"로 투영할 때 scale/offset 계산
-    const computeCover = (srcW: number, srcH: number, dstW: number, dstH: number) => {
-      const scale = Math.max(dstW / srcW, dstH / srcH)
-      const drawW = srcW * scale
-      const drawH = srcH * scale
-      const offX = (dstW - drawW) / 2
-      const offY = (dstH - drawH) / 2
-      return { scale, offX, offY }
-    }
-
-    // 표시 크기 기준으로만 캔버스 내부 해상도(DPR) 갱신
-    const fitCanvas = (canvas: HTMLCanvasElement) => {
-      resizeCanvasToDisplay(canvas)
-    }
-
-    const openStreamByIndex = async (idx: number) => {
-      const videoEl = videoRef.current!
-      const chosen = videoInputs[idx] ?? videoInputs[0]
-      if (!chosen) throw new Error('카메라 장치를 찾을 수 없습니다.')
-
-      stopStream(finalStream)
-      finalStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          deviceId: { exact: chosen.deviceId },
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 30 },
-        },
-        audio: false,
-      })
-      videoEl.srcObject = finalStream
-      await new Promise<void>((res) => {
-        if (videoEl.readyState >= 2) res()
-        else videoEl.addEventListener('loadedmetadata', () => res(), { once: true })
-      })
-      await videoEl.play().catch(() => {})
-      fitCanvas(canvasRef.current!)
-      currentCamIndex = idx
-      console.log('[cam] using index', currentCamIndex, chosen.label || chosen.deviceId)
-    }
+    const onResize = () => fitAll()
 
     const start = async () => {
       try {
-        // ?cam=로 오버라이드
-        const params = new URLSearchParams(location.search)
-        const camIndexFromQuery = params.get('cam')
-        if (Number.isFinite(Number(camIndexFromQuery))) {
-          currentCamIndex = Number(camIndexFromQuery)
-        }
+        const v  = videoRef.current!
+        const cS = skelRef.current!
+        const cF = fxRef.current!
+        const ctxS = cS.getContext('2d')!
 
-        const videoEl = videoRef.current!
-        const canvas = canvasRef.current!
-        const ctx = canvas.getContext('2d')!
-
-        // 1) 권한 팝업 유도
-        firstStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        videoEl.srcObject = firstStream
-
-        timeoutId = setTimeout(() => {
-          if (!ready) setError('카메라 초기화가 지연됩니다. 권한/연결 상태를 확인해주세요.')
-        }, 8000)
-
+        // 1) 카메라
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        v.srcObject = stream
         await new Promise<void>((res) => {
-          if (videoEl.readyState >= 2) res()
-          else videoEl.addEventListener('loadedmetadata', () => res(), { once: true })
+          if (v.readyState >= 2) res()
+          else v.addEventListener('loadedmetadata', () => res(), { once: true })
         })
-        await videoEl.play().catch(() => {})
-        fitCanvas(canvas)
-        window.addEventListener('resize', () => fitCanvas(canvas))
+        await v.play().catch(() => {})
 
-        // 2) 장치 나열
-        const devices = await navigator.mediaDevices.enumerateDevices()
-        videoInputs = devices.filter((d) => d.kind === 'videoinput')
-        console.log('[cams]', videoInputs.map((d, i) => ({ i, label: d.label, deviceId: d.deviceId })))
-        if (videoInputs.length === 0) throw new Error('카메라 장치를 찾을 수 없습니다.')
+        fitAll()
+        window.addEventListener('resize', onResize, { passive: true })
 
-        // 첫 스트림 장치 vs 원하는 인덱스 비교
-        const firstTrack = firstStream.getVideoTracks()[0]
-        const firstId = firstTrack.getSettings().deviceId
-        const chosen = videoInputs[currentCamIndex] ?? videoInputs[0]
-        if (!firstId || firstId !== chosen.deviceId) {
-          stopStream(firstStream); firstStream = null
-          await openStreamByIndex(currentCamIndex)
-        } else {
-          finalStream = firstStream
-        }
-
-        // 3) MediaPipe 로컬 로드 (오프라인 OK)
+        // 2) 모델
         const vision = await FilesetResolver.forVisionTasks('./mediapipe/wasm')
         landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: './mediapipe/hand_landmarker.task' },
@@ -137,146 +82,260 @@ export default function HandOverlay() {
           minHandPresenceConfidence: 0.5,
           minTrackingConfidence: 0.5,
         })
-
         setReady(true)
-        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null }
 
-        // 4) 랜더 루프 (cover 투영 + 절대 px 두께)
-        const pairs: [number, number][] = [
-          [0,1],[1,2],[2,3],[3,4],
-          [0,5],[5,6],[6,7],[7,8],
-          [5,9],[9,10],[10,11],[11,12],
-          [9,13],[13,14],[14,15],[15,16],
-          [13,17],[17,18],[18,19],[19,20],
-          [0,17],
-        ]
+        // 3) 연기
+        smoke = new NeonSmoke(cF)
+        smoke.setPixelSize(cS.width, cS.height)
 
+        // 4) 루프
         const draw = () => {
           if (!landmarker || stopped) return
-          const vW = videoEl.videoWidth
-          const vH = videoEl.videoHeight
-          if (vW && vH) {
-            // 캔버스 내부 해상도(DPR 반영된 픽셀)
-            const cW = canvas.width
-            const cH = canvas.height
+          const vW = v.videoWidth
+          const vH = v.videoHeight
 
-            // 비디오를 캔버스에 cover로 투영 + 좌우 반전
+          if (vW && vH) {
+            const cW = cS.width
+            const cH = cS.height
             const { scale, offX, offY } = computeCover(vW, vH, cW, cH)
 
-            // 배경 클리어
-            ctx.setTransform(1, 0, 0, 1, 0, 0)
-            ctx.clearRect(0, 0, cW, cH)
-
-            // 좌우반전 + cover 오프셋/스케일 적용
-            // (x는 0~vW, y는 0~vH 좌표계로 그린다고 가정)
-            ctx.setTransform(-scale, 0, 0, scale, cW - offX, offY)
+            // 좌표계만 맞춤(그리진 않음)
+            ctxS.setTransform(1, 0, 0, 1, 0, 0)
+            ctxS.clearRect(0, 0, cW, cH)
+            ctxS.setTransform(-scale, 0, 0, scale, cW - offX, offY)
 
             const ts = performance.now()
-            const result: HandLandmarkerResult | undefined =
-              landmarker.detectForVideo(videoEl, ts)
+            const result: HandLandmarkerResult | undefined = landmarker.detectForVideo(v, ts)
 
-            if (result?.landmarks) {
-              // 선/점 두께를 "화면 px"로 고정하기 위해 scale 보정
+            // 이 프레임에서 관측된 손 인덱스 플래그
+            const seen: boolean[] = [false, false]
+
+            if (result?.landmarks?.length) {
               const dpr = window.devicePixelRatio || 1
-              const fixedLine = (LINE_PX * dpr) / scale
-              const fixedR = (POINT_RADIUS_PX * dpr) / scale
 
-              ctx.lineWidth = fixedLine
-              ctx.strokeStyle = '#ffffff'
-              ctx.fillStyle = '#ffffff'
+              for (let i = 0; i < Math.min(2, result.landmarks.length); i++) {
+                const hand = result.landmarks[i]
+                seen[i] = true
 
-              for (const hand of result.landmarks) {
-                // MediaPipe 좌표는 0~1 정규화 → 영상 픽셀 좌표로 변환
-                for (const p of hand) {
-                  const x = p.x * vW
-                  const y = p.y * vH
-                  ctx.beginPath()
-                  ctx.arc(x, y, fixedR, 0, Math.PI * 2)
-                  ctx.fill()
+                // 제스처
+                const s = updateFistState(
+                  fistOn.current[i] || false,
+                  fistEma.current[i] || 0,
+                  isFist(hand),
+                )
+                fistEma.current[i] = s.ema
+                fistOn.current[i]  = s.on
+
+                // 손 중심(비디오 px) → 스켈레톤 캔버스 내부 '디바이스 픽셀'
+                const { x, y } = centroid(hand, vW, vH)
+                const sx = (cW - offX) + (-scale * x)
+                const sy = offY + (scale * y)
+
+                // CSS px (안내 배지 배치용)
+                const cssX = sx / dpr
+                const cssY = sy / dpr
+
+                // 위치 EMA(안내 UI 흔들림 방지)
+                const alpha = 0.35
+                const prev = posEma.current[i]
+                posEma.current[i] = {
+                  x: prev.x ? prev.x*(1-alpha) + cssX*alpha : cssX,
+                  y: prev.y ? prev.y*(1-alpha) + cssY*alpha : cssY,
                 }
-                for (const [a, b] of pairs) {
-                  const A = hand[a], B = hand[b]
-                  const Ax = A.x * vW, Ay = A.y * vH
-                  const Bx = B.x * vW, By = B.y * vH
-                  ctx.beginPath()
-                  ctx.moveTo(Ax, Ay)
-                  ctx.lineTo(Bx, By)
-                  ctx.stroke()
+
+                if (s.on) {
+                  // 주먹이면 안내 숨김 + 연기
+                  smoke!.simmer(sx, sy - 12, { hue: 305, density: 0.20 })
+                  if (s.ema > 0.85) smoke!.burst(sx, sy - 16, { hue: 305, count: 10 })
+                  
+                  // ✅ 주먹 상태에서만 '연기 커서' 이벤트 발행 (CSS 좌표로)
+                  window.dispatchEvent(new CustomEvent('smokePoint', {
+                    detail: { x: cssX, y: cssY, fist: true }
+                  }))
+
+                } 
+                
+                else {
+                  // 주먹이 아니면 이 손의 안내 위치/시각 갱신
+                  lastOpenTsRef.current[i]  = ts
+                  lastOpenPosRef.current[i] = { x: posEma.current[i].x, y: posEma.current[i].y }
+                  
+                  window.dispatchEvent(new CustomEvent('smokePoint', {
+                    detail: { x: cssX, y: cssY, fist: false }
+                  }))
                 }
               }
             }
 
+            // === 프레임 말미: 손별 안내 표시/숨김 결정(안정화) ===
+            const now = performance.now()
+            setPrompts((prev) => {
+              const next: Prompt[] = [{...prev[0]}, {...prev[1]}]
+
+              for (let i = 0; i < 2; i++) {
+                const isSeen = seen[i]
+                const isFistNow = fistOn.current[i]
+
+                // 기본: 숨김
+                let visible = false
+                let x = next[i].x
+                let y = next[i].y
+
+                if (isSeen && !isFistNow) {
+                  // 지금 프레임에 주먹 아님 → 즉시 표시
+                  visible = true
+                  x = lastOpenPosRef.current[i].x
+                  y = lastOpenPosRef.current[i].y
+                } else if (!isSeen && (now - lastOpenTsRef.current[i] < GUIDE_GRACE_MS)) {
+                  // 잠깐 손이 끊겨도 그레이스 타임 동안 유지
+                  visible = true
+                  x = lastOpenPosRef.current[i].x
+                  y = lastOpenPosRef.current[i].y
+                } else {
+                  // 손이 없거나 주먹이면 숨김
+                  visible = false
+                }
+
+                if (visible !== next[i].visible || x !== next[i].x || y !== next[i].y) {
+                  next[i] = { visible, x, y }
+                }
+              }
+
+              // 변경이 있으면 새 배열 반환(리렌더), 없으면 prev 유지
+              if (
+                next[0].visible !== prev[0].visible || next[0].x !== prev[0].x || next[0].y !== prev[0].y ||
+                next[1].visible !== prev[1].visible || next[1].x !== prev[1].x || next[1].y !== prev[1].y
+              ) {
+                return next
+              }
+              return prev
+            })
+
             // 좌표계 복구
-            ctx.setTransform(1, 0, 0, 1, 0, 0)
+            ctxS.setTransform(1, 0, 0, 1, 0, 0)
           }
+
+          // FX 틱
+          smoke?.tick()
           raf = requestAnimationFrame(draw)
         }
 
         draw()
-
-        // 5) 카메라 전환 키 (C)
-        const onKey = (e: KeyboardEvent) => {
-          if (e.key.toLowerCase() === 'c' && videoInputs.length > 1) {
-            const next = (currentCamIndex + 1) % videoInputs.length
-            openStreamByIndex(next).catch(err => {
-              console.error('카메라 전환 실패:', err)
-              setError('카메라 전환 실패: ' + (err?.message ?? String(err)))
-            })
-          }
-        }
-        window.addEventListener('keydown', onKey)
-
-        return () => window.removeEventListener('keydown', onKey)
       } catch (e: any) {
         console.error(e)
         setError(e?.message ?? String(e))
       }
     }
 
-    const cleanupExtra = start()
+    start()
 
     return () => {
       stopped = true
-      cancelAnimationFrame(raf)
-      stopStream(finalStream)
-      if (firstStream && firstStream !== finalStream) stopStream(firstStream)
-      landmarker?.close && landmarker.close()
-      if (timeoutId) clearTimeout(timeoutId)
-      cleanupExtra?.then?.((fn) => typeof fn === 'function' && fn())
+      cancelAnimationFrame(raf || 0)
+      stream?.getTracks().forEach((t) => t.stop())
+      landmarker?.close?.()
+      smoke?.stop()
+      window.removeEventListener('resize', onResize)
     }
   }, [])
 
   return (
     <>
       <video ref={videoRef} playsInline muted autoPlay style={{ display: 'none' }} />
+
+      {/* 그림은 안 그리지만 좌표 변환 기준으로 사용 */}
       <canvas
-        ref={canvasRef}
+        ref={skelRef}
         style={{
           position: 'fixed',
           inset: 0,
           width: '100vw',
           height: '100vh',
           pointerEvents: 'none',
+          background: 'transparent',
           zIndex: 2,
         }}
       />
-      {!ready && !error && (
+
+      {/* 네온 연기(투명 배경) */}
+      <canvas
+        ref={fxRef}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          pointerEvents: 'none',
+          background: 'transparent',
+          zIndex: 3,
+        }}
+      />
+
+      {/* ▽▽ 안내 UI: 손별로 최대 2개 표시 ▽▽ */}
+      {prompts.map((p, idx) => p.visible && (
         <div
+          key={idx}
           style={{
-            position: 'fixed', inset: 0, display: 'grid', placeItems: 'center',
-            color: '#888', fontSize: 14, zIndex: 3, pointerEvents: 'none'
+            position: 'fixed',
+            left: `${p.x}px`,
+            top: `${p.y}px`,
+            transform: 'translate(-50%, -50%)',
+            width: '140px',
+            height: '140px',
+            borderRadius: '999px',
+            display: 'grid',
+            placeItems: 'center',
+            background: 'rgba(0,0,0,0.25)',
+            boxShadow: `
+              0 0 22px 8px rgba(255,61,246,0.18),
+              0 0 60px 6px rgba(135,206,255,0.12)
+            `,
+            border: '2px solid rgba(255,255,255,0.6)',
+            backdropFilter: 'blur(2px)',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: 16,
+            letterSpacing: '0.2px',
+            textAlign: 'center',
+            lineHeight: 1.2,
+            userSelect: 'none',
+            pointerEvents: 'none',
+            zIndex: 6,
           }}
         >
+          <div style={{opacity:.9}}>주먹을 쥐세요!</div>
+          <div style={{ position:'absolute', inset:0, borderRadius:'999px', pointerEvents:'none' }}>
+            <span style={{
+              position:'absolute', inset:6, borderRadius:'999px',
+              border:'2px dashed rgba(255,255,255,0.45)',
+              animation:'ringSpin 3.2s linear infinite'
+            }}/>
+            <span style={{
+              position:'absolute', inset:18, borderRadius:'999px',
+              border:'2px solid rgba(255,61,246,0.45)',
+              boxShadow:'0 0 18px 6px rgba(255,61,246,0.25)',
+              animation:'ringPulse 1.8s ease-in-out infinite'
+            }}/>
+          </div>
+          <style>
+            {`
+              @keyframes ringSpin { to { transform: rotate(360deg); } }
+              @keyframes ringPulse {
+                0%,100% { transform: scale(1); opacity: .9; }
+                50%     { transform: scale(1.06); opacity: .65; }
+              }
+            `}
+          </style>
+        </div>
+      ))}
+
+      {!ready && !error && (
+        <div style={{ position:'fixed', inset:0, display:'grid', placeItems:'center', color:'#888', fontSize:14, zIndex:5, pointerEvents:'none' }}>
           카메라 로딩 중…
         </div>
       )}
       {error && (
-        <div
-          style={{
-            position: 'fixed', top: 20, left: 20, color: '#f66',
-            background: 'rgba(0,0,0,0.6)', padding: '8px 12px', borderRadius: 8, zIndex: 4
-          }}
-        >
+        <div style={{ position:'fixed', top:20, left:20, color:'#f66', background:'transparent', padding:'8px 12px', borderRadius:8, zIndex:6 }}>
           {error}
         </div>
       )}
