@@ -130,7 +130,7 @@ html, body {
   width: 100vw;
   display: grid;
   place-items: center;
-  z-index: 11;                         /* 티커(6)보다 아래 */
+  z-index: 3;
 }
 .stage-frame{
   width: 100vw;
@@ -141,7 +141,7 @@ html, body {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
   object-fit: cover;
-  z-index: 10;
+  z-index: 4;
 }
 
 /* ===== 제품 5칸 그리드: 중앙 위쪽 ===== */
@@ -202,7 +202,7 @@ html, body {
   left: 0;                          /* ✅ 화면 전체 폭 사용 */
   right: 0;
   bottom: calc(var(--stage-h) + var(--stage-gap));  /* ← 스테이지 위에 정확히 위치 */
-  z-index: 6;
+  z-index: 4;
 
   display: grid;                    /* ✅ 왼쪽 QR, 오른쪽 슬라이드 */
   grid-template-columns: auto 1fr;

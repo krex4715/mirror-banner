@@ -33,6 +33,11 @@ export default function HandOverlay() {
   const lastOpenPosRef = useRef<{x:number;y:number}[]>([{x:0,y:0},{x:0,y:0}])
   const GUIDE_GRACE_MS = 160 // 오픈 손이 잠깐 사라져도 유지할 시간(ms)
 
+  // ▼▼ "아무 손도 감지되지 않을 때 뜨는 글로벌 힌트" 상태 ▼▼
+  const [showHint, setShowHint] = useState(false)
+  const lastSeenAnyRef = useRef<number>(0)
+  const NO_HAND_MS = 800 // 손이 완전 안 보이면 이 시간 후 힌트 표시
+
   useEffect(() => {
     let landmarker: HandLandmarker | null = null
     let stream: MediaStream | null = null
@@ -153,9 +158,7 @@ export default function HandOverlay() {
                     detail: { x: cssX, y: cssY, fist: true }
                   }))
 
-                } 
-                
-                else {
+                } else {
                   // 주먹이 아니면 이 손의 안내 위치/시각 갱신
                   lastOpenTsRef.current[i]  = ts
                   lastOpenPosRef.current[i] = { x: posEma.current[i].x, y: posEma.current[i].y }
@@ -211,6 +214,14 @@ export default function HandOverlay() {
               return prev
             })
 
+            // === 글로벌 힌트 토글: 아무 손도 안 보이면 일정 시간 후 표시 ===
+            if (seen[0] || seen[1]) {
+              lastSeenAnyRef.current = ts
+            }
+            const noHands = (ts - (lastSeenAnyRef.current || 0)) > NO_HAND_MS
+            // 프레임마다 세트 방지: 상태 변경시에만 setState
+            setShowHint(prev => (prev !== noHands ? noHands : prev))
+
             // 좌표계 복구
             ctxS.setTransform(1, 0, 0, 1, 0, 0)
           }
@@ -238,6 +249,9 @@ export default function HandOverlay() {
       window.removeEventListener('resize', onResize)
     }
   }, [])
+
+  // 프롬프트(개별 안내 원)가 떠 있으면 글로벌 힌트는 감춤
+  const anyPrompt = prompts[0]?.visible || prompts[1]?.visible
 
   return (
     <>
@@ -267,7 +281,7 @@ export default function HandOverlay() {
           height: '100vh',
           pointerEvents: 'none',
           background: 'transparent',
-          zIndex: 3,
+          zIndex: 20,
         }}
       />
 
@@ -328,6 +342,53 @@ export default function HandOverlay() {
           </style>
         </div>
       ))}
+
+      {/* ===== 아무 손도 감지되지 않을 때: 티커 바로 위 안내 배너 ===== */}
+      {showHint && !anyPrompt && !error && ready && (
+      <div
+        className="hand-hint-global"
+        style={{
+          position: 'fixed',
+          right: 'clamp(16px, 3vw, 36px)',      // ✅ 오른쪽 정렬
+          bottom: 'calc(var(--stage-h) + var(--stage-gap) + var(--ticker-h) + 12px)',
+          zIndex: 10,
+          pointerEvents: 'none',
+
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '10px 16px',
+          borderRadius: 999,
+          background: 'rgba(8,8,12,0.35)',
+          boxShadow: '0 0 18px rgba(97,228,255,0.28), inset 0 0 14px rgba(97,228,255,0.12)',
+          border: '1px solid rgba(255,255,255,0.22)',
+
+          fontFamily: 'var(--ui-font-body, system-ui, -apple-system, sans-serif)',
+          color: '#EFFFFF',
+          maxWidth: 'min(92vw, 640px)',         // 좁은 화면 안전장치
+          textAlign: 'right',                    // 텍스트도 오른쪽 정렬(선택)
+        }}
+      >
+        <span
+          style={{
+            width: 10, height: 10, borderRadius: 999,
+            background: '#61E4FF',
+            boxShadow: '0 0 10px #61E4FF, 0 0 18px #61E4FFAA'
+          }}
+        />
+        <span
+          style={{
+            fontSize: 'clamp(14px, 1.4vw, 22px)',
+            letterSpacing: '.02em',
+            fontWeight: 750,
+            textShadow: '0 2px 8px rgba(0,0,0,.45)'
+          }}
+        >
+          손을 들어서 불을 붙여주세요!
+        </span>
+      </div>
+    )}
+
 
       {!ready && !error && (
         <div style={{ position:'fixed', inset:0, display:'grid', placeItems:'center', color:'#888', fontSize:14, zIndex:5, pointerEvents:'none' }}>

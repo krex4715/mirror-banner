@@ -9,9 +9,12 @@ export class NeonSmoke {
   private running = true
   private canvas: HTMLCanvasElement
 
+  // ✅ 추가: 마지막으로 파티클을 생성한 시각 & 아이들 하드클리어 지연
+  private lastEmitAt = performance.now()
+  private IDLE_HARD_CLEAR_MS = 4000  // ← 연기 끊기고 이 시간 지나면 1회 하드 클리어
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
-    // 픽셀 크기는 외부(HandOverlay)에서 setPixelSize로 동기화
   }
 
   /** skeleton 캔버스와 '내부 픽셀 크기'를 1:1로 맞춤 */
@@ -31,6 +34,7 @@ export class NeonSmoke {
       const life = 900 + Math.random()*700
       this.puffs.push({ x, y, r, life, maxLife: life, hue, seed: Math.random()*1000 })
     }
+    this.lastEmitAt = performance.now()  // ✅ 마지막 방출 시각 갱신
   }
 
   /** 주먹 유지 중 은은히 */
@@ -40,6 +44,7 @@ export class NeonSmoke {
       this.burst(x + (Math.random()-0.5)*6, y + (Math.random()-0.5)*6, {
         hue: options?.hue, count: 1,
       })
+      // burst() 내부에서 lastEmitAt 갱신됨
     }
   }
 
@@ -53,7 +58,7 @@ export class NeonSmoke {
     const w = this.canvas.width
     const h = this.canvas.height
 
-    // 투명 페이드(알파만 지움)
+    // 투명 페이드(알파만 지움) — 기존 느낌 유지
     ctx.setTransform(1,0,0,1,0,0)
     ctx.globalCompositeOperation = 'destination-out'
     const fade = Math.min(0.12, dt * 0.00035)
@@ -64,7 +69,7 @@ export class NeonSmoke {
     ctx.globalCompositeOperation = 'screen'
 
     const gravity = -0.02  // 위로 떠오르는 속도 (더 마이너스 → 더 빨리 위로)
-    const spread  = 0.1   // 좌우(방향) 퍼짐 강도 (↑ 하면 더 퍼짐)
+    const spread  = 0.1    // 좌우(방향) 퍼짐 강도 (↑ 하면 더 퍼짐)
     const curlAmt = 0.45   // 노이즈 곡률 (↑ 하면 더 굽이치며 퍼짐)
 
     const next:Puff[] = []
@@ -97,5 +102,16 @@ export class NeonSmoke {
       }
     }
     this.puffs = next
+
+    // ✅ “잔상만 남는” 상황 방지:
+    //    - 파티클이 완전히 0개이고
+    //    - 마지막 방출 이후 IDLE_HARD_CLEAR_MS 경과 시
+    //    → 1회 하드 클리어 (느낌 유지 + 미세 잔상 제거)
+    if (this.puffs.length === 0 && (now - this.lastEmitAt) > this.IDLE_HARD_CLEAR_MS) {
+      ctx.setTransform(1,0,0,1,0,0)
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.clearRect(0,0,w,h)
+      // 다음 방출 전까지 다시 클리어 조건을 기다리기 위해 lastEmitAt만 유지
+    }
   }
 }
