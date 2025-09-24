@@ -23,6 +23,7 @@ function useGridRects() {
   const lastRef = useRef<Rect[] | null>(null)
   const sameCountRef = useRef(0)
   const RAF = useRef<number | null>(null)
+  const fallbackTimer = useRef<number | null>(null)
 
   const roughlySame = (a: Rect[], b: Rect[]) => {
     if (a.length !== b.length) return false
@@ -32,7 +33,7 @@ function useGridRects() {
       const hDelta = Math.abs(A.height - B.height) / (B.height || 1)
       const lDelta = Math.abs(A.left - B.left)
       const tDelta = Math.abs(A.top - B.top)
-      if (wDelta > 0.02 || hDelta > 0.02 || lDelta > 1 || tDelta > 1) return false
+      if (wDelta > 0.03 || hDelta > 0.03 || lDelta > 2 || tDelta > 2) return false // 🔧 살짝 관대하게
     }
     return true
   }
@@ -51,14 +52,38 @@ function useGridRects() {
       RAF.current = requestAnimationFrame(() => {
         const nowRects = read()
         const last = lastRef.current
-        if (last && roughlySame(nowRects, last)) sameCountRef.current += 1
+
+        // ✅ 최초 한 번은 바로 확정 (패키징 환경 rAF/RO 타이밍 이슈 회피)
+        if (!last || last.length === 0) {
+          lastRef.current = nowRects
+          setRects(nowRects)
+          sameCountRef.current = 0
+          return
+        }
+
+        if (roughlySame(nowRects, last)) sameCountRef.current += 1
         else sameCountRef.current = 0
+
         lastRef.current = nowRects
         if (sameCountRef.current >= 2) setRects(nowRects)
       })
     }
 
+    // 처음 측정 + 폴백 타이머
     schedule()
+
+    // ✅ 500ms 지났는데도 rects가 비어있으면 “그냥 지금 값”으로 확정
+    fallbackTimer.current = window.setTimeout(() => {
+      if (!lastRef.current || lastRef.current.length === 0) {
+        const nowRects = (document.readyState === 'complete') ? read() : []
+        if (nowRects.length > 0) {
+          lastRef.current = nowRects
+          setRects(nowRects)
+        }
+      }
+    }, 500) as unknown as number
+
+    // 업데이트 트리거
     const ro = new ResizeObserver(() => schedule())
     const root = document.querySelector('.grid5-fixed') as HTMLElement | null
     if (root) ro.observe(root)
@@ -70,11 +95,13 @@ function useGridRects() {
       ro.disconnect()
       window.removeEventListener('resize', schedule)
       window.removeEventListener('load', schedule)
+      if (fallbackTimer.current) clearTimeout(fallbackTimer.current)
     }
   }, [])
 
   return rects
 }
+
 
 /** ===== 네온 게이지(4칸) ===== */
 function NeonGauge({

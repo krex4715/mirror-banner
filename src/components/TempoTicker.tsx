@@ -23,11 +23,7 @@ export default function TempoTicker() {
         </div>
       </div>
 
-      {/* ✅ 티커 슬라이드 ‘바로 왼쪽 위’ 네온 라벨 */}
-      <div className="powered-by">
-        <span className="pb-prefix">powered by</span>
-        <span className="pb-brand">ADAM&nbsp;AI</span>
-      </div>
+
     </div>
   )
 }

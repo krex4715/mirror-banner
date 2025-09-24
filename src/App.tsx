@@ -1,7 +1,8 @@
 import PromoStage from './components/PromoStage'
 import HandOverlay from './components/HandOverlay'
 import TempoTicker from './components/TempoTicker'
-import ProductInfoOverlay from './components/ProductInfoOverlay'   // ✅ 추가
+import ProductInfoOverlay from './components/ProductInfoOverlay'
+import PoweredByNeon from './components/PoweredByNeon'
 import './index.css'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
       <PromoStage />
       <HandOverlay />
       <TempoTicker />
+      <PoweredByNeon />
     </main>
   )
 }

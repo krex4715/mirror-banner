@@ -308,61 +308,61 @@ html, body {
   }
 }
 
-
-
-/* --- powered by neon label --- */
-/* --- powered by neon label --- */
-.powered-by{
+/* --- powered by neon label: global bottom center --- */
+.powered-by-global{
   position: fixed;
-  right: 24px;             /* ✅ 오른쪽으로 이동 */
-  left: auto;              /* ✅ 기존 left 제거 */
-  bottom: calc(var(--stage-h) + var(--stage-gap) + var(--ticker-h) + 12px);
-  z-index: 7;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 32px;                 /* ↑ 아래에서 조금 더 올림 (18 → 32) */
+  z-index: 30;
   pointer-events: none;
+
   display: inline-flex;
   align-items: center;
-  gap: 12px;               /* 살짝 키움 */
-  padding: 8px 12px;       /* 살짝 키움 */
+  gap: 16px;                    /* 살짝 키움 (14 → 16) */
+  padding: 11px 16px;           /* 살짝 키움 (9x14 → 11x16) */
   border-radius: 999px;
-  background: rgba(8,8,12,0.32);
-  outline: 1px solid rgba(255,255,255,0.16);
+
+  /* ✅ 테두리/아웃라인 제거 */
+  outline: none;
+  border: none;
+
+  /* 배경은 살짝만 유지해서 가독성 ↑ (원하면 이 줄도 지워서 완전 투명 가능) */
+  background: rgba(8,8,12,0.28);
+
+  /* 네온 느낌 유지 */
   box-shadow:
-    0 0 14px rgba(97,228,255,0.40),
-    inset 0 0 14px rgba(97,228,255,0.14);
+    0 0 18px rgba(97,228,255,0.46),
+    inset 0 0 16px rgba(97,228,255,0.14);
 }
 
-.powered-by .pb-prefix{
+.powered-by-global .pb-prefix{
   font-family: var(--ui-font-body, system-ui,-apple-system,sans-serif);
-  font-size: clamp(11px, 1.0vw, 18px);   /* ↑ 살짝 키움 */
+  font-size: clamp(13px, 1.1vw, 20px);   /* ↑ 살짝 키움 */
   letter-spacing: .12em;
   text-transform: uppercase;
-  opacity: .9;
+  opacity: .92;
   color: #CFEFFF;
 }
 
-.powered-by .pb-brand{
+.powered-by-global .pb-brand{
   font-family: var(--ui-font-title, "Orbitron", system-ui);
   font-weight: 800;
-  font-size: clamp(14px, 1.3vw, 24px);   /* ↑ 살짝 키움 */
+  font-size: clamp(17px, 1.55vw, 28px);  /* ↑ 살짝 키움 */
   letter-spacing: .08em;
   color: #61E4FF;
   text-shadow:
-    0 0 7px #61E4FF,
-    0 0 16px #61E4FF,
-    0 0 30px #61E4FF99;
+    0 0 9px #61E4FF,
+    0 0 20px #61E4FF,
+    0 0 34px #61E4FF99;
   filter: saturate(1.2);
   position: relative;
 }
 
-.powered-by .pb-brand::after{
+.powered-by-global .pb-brand::after{
   content:'';
-  position:absolute; left:0; right:0; bottom:-5px; /* 위치 약간 조정 */
+  position:absolute; left:0; right:0; bottom:-6px;
   height:2px; border-radius:2px;
-  background: radial-gradient(closest-side, #61E4FF 60%, transparent);
+  background: transparent;
   box-shadow: 0 0 12px #61E4FF99, 0 0 22px #61E4FF66;
-}
-
-/* 작은 화면 보정 */
-@media (max-width: 540px){
-  .powered-by{ right: 12px; }
 }
