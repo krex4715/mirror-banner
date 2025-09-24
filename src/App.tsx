@@ -1,5 +1,5 @@
 import PromoStage from './components/PromoStage'
-import HandOverlay from './components/HandOverlay'
+// import HandOverlay from './components/HandOverlay'
 import TempoTicker from './components/TempoTicker'
 import ProductInfoOverlay from './components/ProductInfoOverlay'
 import PoweredByNeon from './components/PoweredByNeon'
@@ -31,7 +31,7 @@ export default function App() {
       <ProductInfoOverlay />
 
       <PromoStage />
-      <HandOverlay />
+      {/* <HandOverlay /> */}
       <TempoTicker />
       <PoweredByNeon />
     </main>
